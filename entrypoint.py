@@ -118,7 +118,7 @@ def redact(line):
 
     if "Read token from file" in line:
         line = re.sub(
-            r"(:\s*).*?$",
+            r"(Read token from file.*?:\s*).*$",
             r"\1[REDACTED]",
             line,
         )
