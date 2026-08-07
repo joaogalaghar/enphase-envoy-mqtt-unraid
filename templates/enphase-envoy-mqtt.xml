@@ -4,7 +4,7 @@
   <Name>Enphase Envoy MQTT</Name>
 
   <Repository>ghcr.io/joaogalaghar/enphase-envoy-mqtt-unraid:latest</Repository>
-  <Icon>https://raw.githubusercontent.com/joaogalaghar/enphase-envoy-mqtt-unraid/main/icon.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/joaogalaghar/enphase-envoy-mqtt-unraid/main/icon.png</Icon>
   <Registry>https://github.com/joaogalaghar/enphase-envoy-mqtt-unraid/pkgs/container/enphase-envoy-mqtt-unraid</Registry>
 
   <Network>bridge</Network>

@@ -7,7 +7,7 @@
   </Profile>
 
   <WebPage>https://github.com/joaogalaghar/enphase-envoy-mqtt-unraid</WebPage>
-  <Icon>https://raw.githubusercontent.com/joaogalaghar/enphase-envoy-mqtt-unraid/main/icon.svg</Icon>
+  <Icon>https://raw.githubusercontent.com/joaogalaghar/enphase-envoy-mqtt-unraid/main/icon.png</Icon>
 
   <Forum>https://github.com/joaogalaghar/enphase-envoy-mqtt-unraid/issues</Forum>
 </Maintainer>
