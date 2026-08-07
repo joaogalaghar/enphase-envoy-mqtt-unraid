@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Container version="2">
+
+  <Name>Enphase Envoy MQTT</Name>
+
+  <Repository>ghcr.io/joaogalaghar/enphase-envoy-mqtt-unraid:latest</Repository>
+  <Icon>https://raw.githubusercontent.com/joaogalaghar/enphase-envoy-mqtt-unraid/main/icon.svg</Icon>
+  <Registry>https://github.com/joaogalaghar/enphase-envoy-mqtt-unraid/pkgs/container/enphase-envoy-mqtt-unraid</Registry>
+
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+
+  <Project>https://github.com/joaogalaghar/enphase-envoy-mqtt-unraid</Project>
+  <Support>https://github.com/joaogalaghar/enphase-envoy-mqtt-unraid/issues</Support>
+
+  <Overview>
+    Unraid packaging and configuration layer for vk2him/Enphase-Envoy-mqtt-json.
+    Reads real-time data from an Enphase Envoy Gateway and publishes it to an MQTT broker.
+    Includes optional Victron Cerbo GX / Venus OS integration examples.
+  </Overview>
+
+  <Category>HomeAutomation:</Category>
+
+  <TemplateURL>https://raw.githubusercontent.com/joaogalaghar/enphase-envoy-mqtt-unraid/main/templates/enphase-envoy-mqtt.xml</TemplateURL>
+
+  <Config
+    Name="Appdata"
+    Target="/app/data"
+    Default="/mnt/user/appdata/enphase-envoy-mqtt-unraid"
+    Mode="rw"
+    Description="Persistent configuration and Enphase authentication token."
+    Type="Path"
+    Display="always"
+    Required="true"
+    Mask="false"/>
+
+  <Config
+    Name="MQTT Broker Host"
+    Target="MQTT_HOST"
+    Default=""
+    Description="Hostname or IP address of the MQTT broker. For Victron Cerbo GX, enter the Cerbo GX IP address."
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="false"/>
+
+  <Config
+    Name="MQTT Port"
+    Target="MQTT_PORT"
+    Default="1883"
+    Description="MQTT broker port."
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="false">1883</Config>
+
+  <Config
+    Name="MQTT Username"
+    Target="MQTT_USER"
+    Default=""
+    Description="MQTT username. Leave empty if authentication is not required."
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="false"/>
+
+  <Config
+    Name="MQTT Password"
+    Target="MQTT_PASSWORD"
+    Default=""
+    Description="MQTT password. Leave empty if authentication is not required."
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="true"/>
+
+  <Config
+    Name="MQTT Topic"
+    Target="MQTT_TOPIC"
+    Default="envoy/json"
+    Description="MQTT topic where the Envoy JSON data will be published."
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="false">envoy/json</Config>
+
+  <Config
+    Name="Envoy Host"
+    Target="ENVOY_HOST"
+    Default=""
+    Description="Hostname or IP address of the Enphase Envoy Gateway."
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="false"/>
+
+  <Config
+    Name="Enphase Account Email"
+    Target="ENVOY_USER"
+    Default=""
+    Description="Enphase Enlighten account email. Required for modern D7/D8 firmware authentication."
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="false"/>
+
+  <Config
+    Name="Enphase Account Password"
+    Target="ENVOY_USER_PASS"
+    Default=""
+    Description="Enphase Enlighten account password. Used to obtain or renew the local Envoy authentication token."
+    Type="Variable"
+    Display="always"
+    Required="false"
+    Mask="true"/>
+
+  <Config
+    Name="Use HTTPS"
+    Target="ENVOY_USE_HTTPS"
+    Default="true"
+    Description="Use HTTPS when connecting to the Envoy. Recommended for recent firmware."
+    Type="Variable"
+    Display="always"
+    Required="true"
+    Mask="false">true</Config>
+
+  <Config
+    Name="FREEDS"
+    Target="USE_FREEDS"
+    Default="false"
+    Description="Enable FREEDS-compatible operation."
+    Type="Variable"
+    Display="advanced"
+    Required="true"
+    Mask="false">false</Config>
+
+  <Config
+    Name="Enphase Battery Installed"
+    Target="BATTERY_INSTALLED"
+    Default="false"
+    Description="Enable if the Enphase installation includes an Enphase battery."
+    Type="Variable"
+    Display="advanced"
+    Required="true"
+    Mask="false">false</Config>
+
+  <Config
+    Name="Debug"
+    Target="DEBUG"
+    Default="false"
+    Description="Enable verbose debugging from the upstream application."
+    Type="Variable"
+    Display="advanced"
+    Required="true"
+    Mask="false">false</Config>
+
+</Container>

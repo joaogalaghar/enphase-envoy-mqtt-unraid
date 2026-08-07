@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Maintainer>
+  <Profile>
+    Unraid packaging and integration templates maintained for the
+    Enphase Envoy MQTT ecosystem, with optional Victron Cerbo GX
+    and Venus OS integration examples.
+  </Profile>
+
+  <WebPage>https://github.com/joaogalaghar/enphase-envoy-mqtt-unraid</WebPage>
+  <Icon>https://raw.githubusercontent.com/joaogalaghar/enphase-envoy-mqtt-unraid/main/icon.svg</Icon>
+
+  <Forum>https://github.com/joaogalaghar/enphase-envoy-mqtt-unraid/issues</Forum>
+</Maintainer>
