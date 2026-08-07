@@ -1,0 +1,11 @@
+.git
+.github
+.gitignore
+README.md
+LICENSE
+templates
+examples
+*.md
+.DS_Store
+__pycache__
+*.pyc
