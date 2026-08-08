@@ -1,0 +1,231 @@
+[
+    {
+        "id": "f4c9a1010c6d0001",
+        "type": "tab",
+        "label": "Enphase Grid + PV → Victron (Cerbo MQTT)",
+        "disabled": false,
+        "info": "Receives the envoy/json topic directly from the local Cerbo GX MQTT broker (127.0.0.1:1883) and creates virtual Grid Meter and PV Inverter devices in Victron.",
+        "env": []
+    },
+    {
+        "id": "f4c9a1010c6d0002",
+        "type": "mqtt in",
+        "z": "f4c9a1010c6d0001",
+        "name": "Enphase Envoy — Cerbo MQTT",
+        "topic": "envoy/json",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "f4c9a1010c6d00b0",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 170,
+        "y": 180,
+        "wires": [
+            [
+                "f4c9a1010c6d0003"
+            ]
+        ]
+    },
+    {
+        "id": "f4c9a1010c6d0003",
+        "type": "function",
+        "z": "f4c9a1010c6d0001",
+        "name": "Envoy → Grid + PV",
+        "func": "/*\n * Enphase Envoy-S Metered -> Victron virtual Grid + PV\n *\n * Input:\n *   MQTT topic: envoy/json\n *\n * Enphase meter EIDs:\n *   704643328 = Production / PV\n *   704643584 = Net Consumption / Grid\n *\n * Grid sign is preserved:\n *   positive = import from grid\n *   negative = export to grid\n *\n * Freshness is handled by the watchdog rather than by comparing\n * the Envoy timestamp with the Cerbo clock. This avoids false\n * \"dados inválidos\" errors caused by clock differences or retained data.\n */\n\nlet data = msg.payload;\n\nif (Buffer.isBuffer(data)) {\n    data = data.toString(\"utf8\");\n}\n\nif (typeof data === \"string\") {\n    try {\n        data = JSON.parse(data);\n    } catch (e) {\n        node.status({ fill: \"red\", shape: \"dot\", text: \"JSON inválido\" });\n        node.warn(\"envoy/json não contém JSON válido\");\n        return [null, null, null];\n    }\n}\n\nif (!Array.isArray(data)) {\n    node.status({ fill: \"red\", shape: \"dot\", text: \"payload não é array\" });\n    node.warn(\"Formato inesperado em envoy/json\");\n    return [null, null, null];\n}\n\nfunction num(v) {\n    const n = Number(v);\n    return Number.isFinite(n) ? n : NaN;\n}\n\nfunction meterPower(meter) {\n    if (!meter) return NaN;\n\n    const active = num(meter.activePower);\n    if (Number.isFinite(active)) return active;\n\n    return num(meter.instantaneousDemand);\n}\n\nfunction bestPhase(meter) {\n    if (!meter || !Array.isArray(meter.channels)) return null;\n\n    const valid = meter.channels.filter(ch => {\n        const v = num(ch.voltage);\n        return Number.isFinite(v) && v > 100 && v < 300;\n    });\n\n    if (!valid.length) return null;\n\n    valid.sort((a, b) => {\n        const pa = Math.abs(\n            Number.isFinite(num(a.activePower))\n                ? num(a.activePower)\n                : num(a.instantaneousDemand)\n        ) || 0;\n\n        const pb = Math.abs(\n            Number.isFinite(num(b.activePower))\n                ? num(b.activePower)\n                : num(b.instantaneousDemand)\n        ) || 0;\n\n        return pb - pa;\n    });\n\n    return valid[0];\n}\n\nconst pvMeter = data.find(item => Number(item.eid) === 704643328);\nconst gridMeter = data.find(item => Number(item.eid) === 704643584);\n\nif (!pvMeter || !gridMeter) {\n    const missing = [];\n    if (!pvMeter) missing.push(\"PV\");\n    if (!gridMeter) missing.push(\"Grid\");\n\n    node.status({\n        fill: \"red\",\n        shape: \"dot\",\n        text: \"EID em falta: \" + missing.join(\" + \")\n    });\n\n    node.warn(\"EIDs Enphase esperados não encontrados em envoy/json\");\n    return [null, null, null];\n}\n\nlet pvPower = meterPower(pvMeter);\nconst gridPower = meterPower(gridMeter);\n\nif (!Number.isFinite(pvPower) || !Number.isFinite(gridPower)) {\n    node.status({ fill: \"red\", shape: \"dot\", text: \"potência inválida\" });\n    node.warn(\"activePower/instantaneousDemand inválido no payload Enphase\");\n    return [null, null, null];\n}\n\n// CT de produção pode apresentar alguns watts negativos à noite.\npvPower = Math.max(0, pvPower);\n\nconst pvPhase = bestPhase(pvMeter);\nconst gridPhase = bestPhase(gridMeter);\n\nconst pvVoltage = num(pvPhase ? pvPhase.voltage : pvMeter.voltage);\nconst pvCurrent = Math.abs(num(pvPhase ? pvPhase.current : pvMeter.current));\n\nconst gridVoltage = num(gridPhase ? gridPhase.voltage : gridMeter.voltage);\nconst gridCurrent = Math.abs(num(gridPhase ? gridPhase.current : gridMeter.current));\n\nlet gridFrequency = num(gridPhase ? gridPhase.freq : gridMeter.freq);\nif (!Number.isFinite(gridFrequency) || gridFrequency < 40 || gridFrequency > 70) {\n    gridFrequency = 50;\n}\n\nconst roundedPvPower = Math.round(pvPower);\nconst roundedGridPower = Math.round(gridPower);\n\n// ---------- Grid virtual meter ----------\nconst gridMsg = {\n    payload: {\n        \"/Ac/Power\": roundedGridPower,\n        \"/Ac/L1/Power\": roundedGridPower,\n        \"/Ac/Frequency\": Number(gridFrequency.toFixed(2)),\n        \"/Connected\": 1,\n        \"/ErrorCode\": 0\n    }\n};\n\nif (Number.isFinite(gridVoltage) && gridVoltage > 100 && gridVoltage < 300) {\n    gridMsg.payload[\"/Ac/L1/Voltage\"] = Number(gridVoltage.toFixed(1));\n}\n\nif (Number.isFinite(gridCurrent) && gridCurrent >= 0 && gridCurrent < 100) {\n    gridMsg.payload[\"/Ac/L1/Current\"] = Number(gridCurrent.toFixed(2));\n}\n\nconst gridForwardWh = num(gridMeter.actEnergyDlvd);\nif (Number.isFinite(gridForwardWh) && gridForwardWh >= 0) {\n    const kWh = Number((gridForwardWh / 1000).toFixed(3));\n    gridMsg.payload[\"/Ac/Energy/Forward\"] = kWh;\n    gridMsg.payload[\"/Ac/L1/Energy/Forward\"] = kWh;\n}\n\nconst gridReverseWh = num(gridMeter.actEnergyRcvd);\nif (Number.isFinite(gridReverseWh) && gridReverseWh >= 0) {\n    const kWh = Number((gridReverseWh / 1000).toFixed(3));\n    gridMsg.payload[\"/Ac/Energy/Reverse\"] = kWh;\n    gridMsg.payload[\"/Ac/L1/Energy/Reverse\"] = kWh;\n}\n\n// ---------- PV virtual inverter ----------\nconst pvMsg = {\n    payload: {\n        \"/Ac/Power\": roundedPvPower,\n        \"/Ac/L1/Power\": roundedPvPower,\n        \"/StatusCode\": roundedPvPower > 0 ? 7 : 8,\n        \"/ErrorCode\": 0,\n        \"/Connected\": 1\n    }\n};\n\nif (Number.isFinite(pvVoltage) && pvVoltage > 100 && pvVoltage < 300) {\n    pvMsg.payload[\"/Ac/L1/Voltage\"] = Number(pvVoltage.toFixed(1));\n}\n\nif (Number.isFinite(pvCurrent) && pvCurrent >= 0 && pvCurrent < 100) {\n    pvMsg.payload[\"/Ac/L1/Current\"] = Number(pvCurrent.toFixed(2));\n}\n\n// Keep the same energy handling as the PV-only flow that is already working.\nconst pvForwardWh = num(pvMeter.actEnergyDlvd);\nif (Number.isFinite(pvForwardWh) && pvForwardWh >= 0) {\n    const kWh = Number((pvForwardWh / 1000).toFixed(3));\n    pvMsg.payload[\"/Ac/Energy/Forward\"] = kWh;\n    pvMsg.payload[\"/Ac/L1/Energy/Forward\"] = kWh;\n}\n\n// Any valid live MQTT message resets the watchdog.\nconst heartbeatMsg = {\n    payload: true,\n    topic: \"enphase-valid\"\n};\n\nnode.status({\n    fill: \"green\",\n    shape: \"dot\",\n    text:\n        roundedGridPower + \" W grid · \" +\n        roundedPvPower + \" W PV · Cerbo MQTT\"\n});\n\nreturn [gridMsg, pvMsg, heartbeatMsg];",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 450,
+        "y": 180,
+        "wires": [
+            [
+                "f4c9a1010c6d0004",
+                "f4c9a1010c6d0008"
+            ],
+            [
+                "f4c9a1010c6d0005",
+                "f4c9a1010c6d0009"
+            ],
+            [
+                "f4c9a1010c6d0006"
+            ]
+        ]
+    },
+    {
+        "id": "f4c9a1010c6d0004",
+        "type": "victron-virtual",
+        "z": "f4c9a1010c6d0001",
+        "name": "Enphase Grid Meter",
+        "outputs": 1,
+        "device": "grid",
+        "default_values": false,
+        "enable_s2support": false,
+        "grid_nrofphases": "1",
+        "x": 1100,
+        "y": 160,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "f4c9a1010c6d0005",
+        "type": "victron-virtual",
+        "z": "f4c9a1010c6d0001",
+        "name": "Enphase IQ Gateway",
+        "outputs": 1,
+        "device": "pvinverter",
+        "default_values": false,
+        "enable_s2support": false,
+        "battery_capacity": "",
+        "include_battery_temperature": false,
+        "battery_voltage_custom": "",
+        "include_engine_hours": false,
+        "include_starter_voltage": false,
+        "include_history_energy": false,
+        "include_motor_temp": false,
+        "include_controller_temp": false,
+        "include_coolant_temp": false,
+        "include_motor_rpm": true,
+        "include_motor_direction": true,
+        "position": "0",
+        "pvinverter_nrofphases": "1",
+        "include_tank_battery": false,
+        "include_tank_temperature": false,
+        "tank_battery_voltage": "",
+        "tank_capacity": "",
+        "include_humidity": false,
+        "include_pressure": false,
+        "include_temp_battery": false,
+        "temp_battery_voltage": "",
+        "x": 1100,
+        "y": 220,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "f4c9a1010c6d0006",
+        "type": "trigger",
+        "z": "f4c9a1010c6d0001",
+        "name": "Watchdog 15 s",
+        "op1": "",
+        "op2": "true",
+        "op1type": "nul",
+        "op2type": "bool",
+        "duration": "15",
+        "extend": true,
+        "overrideDelay": false,
+        "units": "s",
+        "reset": "",
+        "bytopic": "all",
+        "topic": "topic",
+        "outputs": 1,
+        "x": 650,
+        "y": 300,
+        "wires": [
+            [
+                "f4c9a1010c6d0007"
+            ]
+        ]
+    },
+    {
+        "id": "f4c9a1010c6d0007",
+        "type": "function",
+        "z": "f4c9a1010c6d0001",
+        "name": "Grid + PV offline",
+        "func": "const gridMsg = {\n    payload: {\n        \"/Ac/Power\": 0,\n        \"/Ac/L1/Power\": 0,\n        \"/Ac/Frequency\": 50,\n        \"/Connected\": 0,\n        \"/ErrorCode\": 0\n    }\n};\n\nconst pvMsg = {\n    payload: {\n        \"/Ac/Power\": 0,\n        \"/Ac/L1/Power\": 0,\n        \"/StatusCode\": 8,\n        \"/ErrorCode\": 0,\n        \"/Connected\": 0\n    }\n};\n\nnode.status({\n    fill: \"red\",\n    shape: \"ring\",\n    text: \"sem envoy/json há 15 s\"\n});\n\nreturn [gridMsg, pvMsg];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 840,
+        "y": 300,
+        "wires": [
+            [
+                "f4c9a1010c6d0004"
+            ],
+            [
+                "f4c9a1010c6d0005"
+            ]
+        ]
+    },
+    {
+        "id": "f4c9a1010c6d0008",
+        "type": "debug",
+        "z": "f4c9a1010c6d0001",
+        "d": true,
+        "name": "Debug Grid",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 720,
+        "y": 70,
+        "wires": []
+    },
+    {
+        "id": "f4c9a1010c6d0009",
+        "type": "debug",
+        "z": "f4c9a1010c6d0001",
+        "d": true,
+        "name": "Debug PV",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 720,
+        "y": 110,
+        "wires": []
+    },
+    {
+        "id": "f4c9a1010c6d00b0",
+        "type": "mqtt-broker",
+        "name": "MQTT Cerbo GX",
+        "broker": "127.0.0.1",
+        "port": "1883",
+        "clientid": "node-red-enphase-grid-pv",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": "4",
+        "keepalive": "60",
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "071e4f55c6ae844d",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "@victronenergy/node-red-contrib-victron": "1.6.64"
+        }
+    }
+]
