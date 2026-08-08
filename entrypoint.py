@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 
-WRAPPER_VERSION = os.getenv("WRAPPER_VERSION", "dev")
+WRAPPER_VERSION = os.getenv("WRAPPER_VERSION", "").strip()
 
 DATA_DIR = Path("/app/data")
 OPTIONS_FILE = DATA_DIR / "options.json"
@@ -165,10 +165,12 @@ token_exists = TOKEN_FILE.exists() and TOKEN_FILE.stat().st_size > 0
 
 protocol = "https" if config["ENVOY_USE_HTTPS"] else "http"
 
-print(
-    f"[wrapper] Enphase Envoy MQTT for Unraid {WRAPPER_VERSION}",
-    flush=True,
-)
+wrapper_banner = "[wrapper] Enphase Envoy MQTT for Unraid"
+
+if WRAPPER_VERSION:
+    wrapper_banner += f" {WRAPPER_VERSION}"
+
+print(wrapper_banner, flush=True)
 print(
     f"[wrapper] Configuration written to {OPTIONS_FILE}",
     flush=True,

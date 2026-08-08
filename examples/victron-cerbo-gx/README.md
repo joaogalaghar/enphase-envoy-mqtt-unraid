@@ -1,6 +1,8 @@
 # Victron Cerbo GX / Venus OS Integration
 
-This example shows how to use the MQTT data published by **Enphase Envoy MQTT** to create virtual **Grid Meter** and **PV Inverter** devices on a Victron Cerbo GX running Venus OS.
+This example shows how to use the MQTT data published by **Enphase Envoy MQTT**
+to create virtual **Grid Meter** and **PV Inverter** devices on a Victron Cerbo
+GX running Venus OS.
 
 The Node-RED flow included in this directory was tested with:
 
@@ -9,11 +11,11 @@ The Node-RED flow included in this directory was tested with:
 - **Enphase Envoy-S Metered**
 - **Enphase Envoy firmware D8**
 - **Unraid**
-- **Node-RED on the Cerbo GX**
+- **Node-RED running on the Cerbo GX**
 - `@victronenergy/node-red-contrib-victron` version `1.6.64`
 
-> This integration is optional.  
-> The main Enphase Envoy MQTT container works with any MQTT broker and does not require Victron hardware.
+> This integration is optional. The main Enphase Envoy MQTT container works with
+> any MQTT broker and does not require Victron hardware.
 
 ---
 
@@ -29,11 +31,13 @@ Enphase Envoy-S Metered
 Unraid
 Enphase Envoy MQTT container
         │
-        │ MQTT
+        │ MQTT to the Cerbo GX LAN IP / hostname
+        │ port 1883
         ▼
 Cerbo GX MQTT broker
-127.0.0.1:1883
         │
+        │ local Node-RED connection
+        │ 127.0.0.1:1883
         ▼
 Node-RED on Cerbo GX
         │
@@ -51,7 +55,29 @@ The Unraid container publishes the raw Enphase meter data to:
 envoy/json
 ```
 
-Node-RED subscribes to that topic and converts the relevant Enphase measurements into Victron virtual devices.
+Node-RED subscribes to the same topic and converts the relevant Enphase
+measurements into Victron virtual devices.
+
+### Important: LAN IP vs `127.0.0.1`
+
+There are two different MQTT connections in this setup:
+
+1. **Unraid → Cerbo GX**  
+   Configure `MQTT_HOST` in the Unraid container with the **Cerbo GX LAN IP
+   address or hostname**. Do **not** use `127.0.0.1` in the Unraid container.
+
+2. **Node-RED on Cerbo GX → local Cerbo GX MQTT broker**  
+   The included Node-RED flow uses `127.0.0.1:1883`, because Node-RED and the
+   MQTT broker are running on the same Cerbo GX.
+
+Example:
+
+```text
+Unraid container MQTT_HOST = 192.168.1.50
+Node-RED broker             = 127.0.0.1
+MQTT port                   = 1883
+MQTT topic                  = envoy/json
+```
 
 ---
 
@@ -87,7 +113,7 @@ The tested flow uses:
 
 ## MQTT Broker
 
-When Node-RED is running directly on the Cerbo GX, use:
+When Node-RED is running directly on the Cerbo GX, the included flow uses:
 
 ```text
 Host: 127.0.0.1
@@ -95,23 +121,11 @@ Port: 1883
 Topic: envoy/json
 ```
 
-Using `127.0.0.1` is recommended because Node-RED and the MQTT broker are running on the same Cerbo GX.
+Using `127.0.0.1` for the Node-RED MQTT connection avoids depending on the Cerbo
+GX LAN address.
 
-This avoids depending on the Cerbo GX LAN IP address.
-
-If Node-RED is running on another device, replace:
-
-```text
-127.0.0.1
-```
-
-with the IP address or hostname of the Cerbo GX.
-
-For example:
-
-```text
-192.168.1.50
-```
+If Node-RED is running on another device, replace `127.0.0.1` with the LAN IP
+address or hostname of the Cerbo GX.
 
 ---
 
@@ -121,22 +135,18 @@ In Node-RED on the Cerbo GX:
 
 1. Open the Node-RED editor.
 2. Select **Menu → Import**.
-3. Import:
-
-```text
-node-red-flow.json
-```
-
-4. Confirm that the MQTT broker is configured correctly.
+3. Import `node-red-flow.json`.
+4. Confirm that the MQTT broker configuration is correct.
 5. Click **Deploy**.
 
-The flow should immediately start receiving `envoy/json`.
+The flow should immediately start receiving `envoy/json` messages.
 
 ---
 
 ## Enphase Meter IDs
 
-The flow expects the standard Enphase meter IDs used by the tested Envoy-S Metered installation:
+The flow expects the meter IDs observed on the tested Envoy-S Metered
+installation:
 
 ```text
 704643328 = Production / PV
@@ -144,6 +154,10 @@ The flow expects the standard Enphase meter IDs used by the tested Envoy-S Meter
 ```
 
 The flow searches the incoming JSON array for these EIDs.
+
+Different Envoy models or meter configurations may expose different IDs. If the
+flow reports a missing EID, inspect the raw `envoy/json` payload and adjust the
+Function node as required.
 
 ---
 
@@ -165,13 +179,17 @@ Example:
 -1200 W = exporting 1200 W to the grid
 ```
 
+If import and export appear reversed on your installation, verify the Enphase CT
+orientation and meter configuration before changing the flow.
+
 ---
 
 ## PV Power
 
-PV production is taken from the Enphase production meter.
+PV production is read from the Enphase production meter.
 
-Small negative values that may appear from the production CT at night are clamped to:
+Small negative values that may be reported by the production CT at night are
+clamped to:
 
 ```text
 0 W
@@ -215,45 +233,42 @@ The virtual Grid Meter exposes, when available:
 
 ## Watchdog
 
-The flow includes a watchdog.
+The flow includes a 15-second watchdog.
 
-If no valid `envoy/json` message is received for 15 seconds, the virtual devices are marked offline and their power is set to `0 W`.
+If valid `envoy/json` messages stop arriving, the virtual devices are marked
+offline and their power is set to `0 W`.
 
-This prevents stale values from remaining visible in Venus OS if the MQTT stream stops.
+This prevents stale values from remaining visible in Venus OS if the MQTT stream
+stops.
 
 ---
 
 ## Status Display
 
-When the flow is receiving valid data, the conversion Function node shows a status similar to:
+When the flow is receiving valid data, the conversion Function node shows a
+status similar to:
 
 ```text
 250 W grid · 2480 W PV · Cerbo MQTT
 ```
 
-If the expected Enphase meter IDs are not found, the node reports which meter is missing.
+If the expected Enphase meter IDs are not found, the Function node reports the
+missing meter.
 
 ---
 
 ## Troubleshooting
 
-### No MQTT data
+### No MQTT data in Node-RED
 
-Confirm that the Cerbo GX broker is receiving the topic:
+Confirm that:
 
-```text
-envoy/json
-```
-
-If Node-RED is running on the Cerbo GX, the broker should normally be:
-
-```text
-127.0.0.1:1883
-```
-
-Also confirm that the Enphase Envoy MQTT container is configured to publish to the Cerbo GX.
-
----
+- the Enphase Envoy MQTT container is running;
+- its `MQTT_HOST` points to the Cerbo GX **LAN IP address or hostname**;
+- its MQTT port is `1883` unless you changed it;
+- its MQTT topic is `envoy/json`;
+- the Cerbo GX MQTT broker is enabled;
+- Node-RED is connected to `127.0.0.1:1883` when running directly on the Cerbo GX.
 
 ### Flow reports a missing EID
 
@@ -264,27 +279,22 @@ The example expects:
 704643584 = Grid
 ```
 
-Different Envoy models or meter configurations may expose different EIDs.
-
-Inspect the raw `envoy/json` payload and adjust the EIDs in the Function node if necessary.
-
----
+Inspect the raw `envoy/json` payload and adjust the EIDs in the Function node if
+your Envoy uses different meter IDs.
 
 ### Grid import/export appears reversed
 
 The example preserves the sign reported by the Enphase net-consumption meter.
-
-If your CT orientation or Envoy configuration reports the opposite sign, you may need to invert `gridPower` in the Function node.
-
----
+Check CT orientation and the Enphase meter configuration first. If your setup is
+intentionally reversed, adapt the `gridPower` handling in the Function node.
 
 ### PV works but Grid does not
 
-Make sure the Envoy has a configured and working **consumption / net-consumption meter**.
+Make sure the Envoy has a configured and working **consumption / net-consumption
+meter**.
 
-The PV virtual device can work from the production meter alone, but the Grid Meter requires the Enphase net-consumption data.
-
----
+The PV virtual device can work from the production meter alone, while the Grid
+Meter requires net-consumption data.
 
 ### Virtual devices do not appear in Venus OS
 
@@ -293,22 +303,23 @@ Confirm that:
 - `@victronenergy/node-red-contrib-victron` is installed;
 - the flow has been deployed;
 - the `victron-virtual` nodes are enabled;
-- Node-RED is running on the Cerbo GX.
+- Node-RED is running correctly on the Cerbo GX.
 
 ---
 
-## Notes
+## Single-Phase Example
 
-This example was created for a single-phase installation.
+This example was created and tested on a single-phase installation.
 
 The virtual devices are configured as:
 
 ```text
-Grid Meter: 1 phase
+Grid Meter:  1 phase
 PV Inverter: 1 phase
 ```
 
-Multi-phase installations may require adjustments to the virtual device configuration and phase mapping.
+Multi-phase installations require changes to the virtual-device configuration
+and phase mapping.
 
 ---
 
@@ -319,8 +330,9 @@ The flow has been tested with:
 - **Victron MultiPlus-II 48V - 5000VA - 70A**
 - **Victron Energy Cerbo GX MK2 Controller**
 - **Enphase Envoy-S Metered**
+- **Enphase firmware D8**
 
-The tested setup uses the Cerbo GX local MQTT broker:
+The Node-RED flow uses the Cerbo GX local MQTT broker at:
 
 ```text
 127.0.0.1:1883
@@ -336,6 +348,8 @@ envoy/json
 
 ## Disclaimer
 
-This is a community integration and is not affiliated with or endorsed by Enphase Energy or Victron Energy.
+This is a community integration and is not affiliated with or endorsed by
+Enphase Energy or Victron Energy.
 
-Always verify meter direction, power values, and system behaviour before relying on virtual meter data for control or automation.
+Always verify meter direction, power values, and system behaviour before relying
+on virtual meter data for control or automation.

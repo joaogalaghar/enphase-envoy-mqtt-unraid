@@ -150,11 +150,15 @@ The image is automatically built from this repository using GitHub Actions.
 
 ## Unraid Installation
 
-The application is designed for installation through **Unraid Community
-Applications**.
+The application is publicly available through **Unraid Community Applications**.
 
-Until the application is publicly listed in Community Applications, the template
-can also be loaded manually from:
+In the Unraid **Apps** tab, search for:
+
+```text
+Enphase Envoy MQTT
+```
+
+The template can also be loaded manually from:
 
 ```text
 https://raw.githubusercontent.com/joaogalaghar/enphase-envoy-mqtt-unraid/main/templates/enphase-envoy-mqtt.xml
@@ -263,25 +267,27 @@ Envoy-S Metered
       ▼
 Unraid Docker
       │
-      │ MQTT
+      │ MQTT to the Cerbo GX LAN IP / hostname
+      │ port 1883
       ▼
-Cerbo GX
+Cerbo GX MQTT broker
       │
+      │ local Node-RED connection
+      │ 127.0.0.1:1883
       ▼
-Node-RED
+Node-RED on Cerbo GX
       │
-      ├── Grid values
-      └── PV production values
+      ├── Virtual Grid Meter
+      └── Virtual PV Inverter
 ```
 
-Node-RED can then transform the relevant Enphase measurements into the MQTT
-messages expected by Venus OS virtual devices.
+The Unraid container must use the **Cerbo GX LAN IP address or hostname** as
+`MQTT_HOST`. `127.0.0.1` is only used by Node-RED when Node-RED is running on
+the Cerbo GX itself.
 
-Example flows and additional documentation will be available under:
+A tested Node-RED flow and additional documentation are available under:
 
-```text
-examples/victron-cerbo-gx/
-```
+[examples/victron-cerbo-gx/](examples/victron-cerbo-gx/)
 
 ---
 
