@@ -544,6 +544,22 @@ optional community integration built using MQTT and Node-RED.
 
 ---
 
+## Support the project
+
+If you find this project useful, feel free to support it ☕
+
+<p>
+  <a href="https://buymeacoffee.com/joaoq" target="_blank" rel="noopener noreferrer">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="40">
+  </a>
+  &nbsp;
+  <a href="https://paypal.me/joaomg" target="_blank" rel="noopener noreferrer">
+    <img src="https://img.shields.io/badge/PayPal-Support-0070BA?logo=paypal&logoColor=white" alt="PayPal" height="40">
+  </a>
+</p>
+
+---
+
 ## Support
 
 For issues related specifically to the **Unraid wrapper, Docker image, template,
